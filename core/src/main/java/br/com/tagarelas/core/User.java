@@ -31,6 +31,7 @@ public class User {
 
     public User(String username, String passwordHash, String fullName, LocalDate birthday, String email,
             String phoneNumber) {
+        this.id = UUID.randomUUID();
         this.username = username;
         this.password = passwordHash;
         this.fullName = fullName;

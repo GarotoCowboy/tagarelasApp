@@ -28,7 +28,8 @@ public class Message {
         validateSenderId(senderId);
         validateChannelId(channelId);
         validateMessage(content, attachments);
-
+        
+        this.id = UUID.randomUUID();
         this.messageType = messageType;
         this.content = content;
         this.attachments = attachments;

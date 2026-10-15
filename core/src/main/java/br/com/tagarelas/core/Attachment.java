@@ -20,6 +20,7 @@ public class Attachment {
         validateUrl(url);
         validatefileSize(fileSize);
 
+        this.id = UUID.randomUUID();
         this.url = url;
         this.fileName = fileName;
         this.fileSize = fileSize;

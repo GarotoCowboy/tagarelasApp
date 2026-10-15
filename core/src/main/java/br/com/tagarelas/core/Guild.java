@@ -28,7 +28,7 @@ public class Guild {
     public Guild(String name, String description, String iconUrl, UUID ownerId) {
         validateName(name);
         validateOwnerId(ownerId);
-
+        this.id = UUID.randomUUID();
         this.name = name;
         this.description = description;
         this.iconUrl = iconUrl;

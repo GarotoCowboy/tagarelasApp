@@ -17,6 +17,7 @@ public abstract class Channel {
         if (channelType == null) {
             throw new DomainValidationException("ChannelType cannot be null");
         }
+        this.id = UUID.randomUUID();
         this.channelType = channelType;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
