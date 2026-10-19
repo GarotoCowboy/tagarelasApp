@@ -17,6 +17,7 @@ public class Message {
     private UUID channelId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime deletedAt;
     private boolean isDeleted;
 
     public Message() {
@@ -37,6 +38,7 @@ public class Message {
         this.channelId = channelId;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.deletedAt = null;
         this.isDeleted = false;
     }
 
@@ -50,6 +52,7 @@ public class Message {
         this.channelId = channelId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.deletedAt = null;
         this.isDeleted = isDeleted;
     }
 
@@ -95,6 +98,7 @@ public class Message {
         }
         this.isDeleted = true;
         this.updatedAt = LocalDateTime.now();
+        this.deletedAt = LocalDateTime.now();
     }
 
     public UUID getId() {
@@ -141,4 +145,9 @@ public class Message {
     public boolean isDeleted() {
         return isDeleted;
     }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+    
 }

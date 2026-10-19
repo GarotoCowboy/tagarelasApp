@@ -84,7 +84,7 @@ public class Role {
 
     public boolean hasPermission(GuildPermission permission) {
         if (this.permissions.contains(GuildPermission.ADMINISTRATOR)) {
-            return true; // Administrador tem todas as permissões no Discord!
+            return true; 
         }
         return this.permissions.contains(permission);
     }
