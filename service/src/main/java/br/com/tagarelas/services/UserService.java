@@ -5,11 +5,16 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import br.com.tagarelas.core.User;
+import br.com.tagarelas.core.enums.OtpDeliveryMethod;
+import br.com.tagarelas.core.enums.UserStatus;
+import br.com.tagarelas.core.enums.UserStatusPresence;
+import br.com.tagarelas.core.exceptions.BusinessRuleViolationException;
 import br.com.tagarelas.core.exceptions.DomainValidationException;
 import br.com.tagarelas.core.exceptions.ErrorCode;
 import br.com.tagarelas.core.exceptions.UserException;
 import br.com.tagarelas.services.events.UserOtpCodeEvent;
 import br.com.tagarelas.services.events.UserRegisteredEvent;
+import br.com.tagarelas.services.input.ChangePasswordInput;
 import br.com.tagarelas.services.input.EditUserInput;
 import br.com.tagarelas.services.input.RegisterUserInput;
 import br.com.tagarelas.services.output.UserOutput;
@@ -74,6 +79,62 @@ public class UserService {
         UserOutput output = toOutput(savedUser);
 
         return output;
+    }
+
+    public UserOutput activateUser(UUID userId, String otpCode) {
+        if (userId == null) {
+            throw new DomainValidationException("User ID cannot be null");
+        }
+        if (otpCode == null || otpCode.isBlank()) {
+            throw new DomainValidationException("OTP code cannot be null or blank");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND_ID, "User not found with id: " + userId));
+
+        String storedOtp = otpRepository.get(userId)
+                .orElseThrow(() -> new UserException(ErrorCode.OTP_EXPIRED_OR_NOT_FOUND,
+                        "OTP code expired or not found for user: " + userId));
+
+        if (!storedOtp.equals(otpCode)) {
+            throw new UserException(ErrorCode.INVALID_OTP_CODE, "Invalid OTP code");
+        }
+
+        user.activateUser();
+
+        User savedUser = userRepository.save(user);
+        otpRepository.delete(userId);
+
+        return toOutput(savedUser);
+    }
+
+    public void resendOtp(UUID userId, OtpDeliveryMethod otpDeliveryMethod) {
+        if (userId == null) {
+            throw new DomainValidationException("User ID cannot be null");
+        }
+        if (otpDeliveryMethod == null) {
+            throw new DomainValidationException("OtpDeliveryMethod cannot be null");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND_ID, "User not found with id: " + userId));
+
+        if (user.getUserStatus() != UserStatus.PENDING_VERIFICATION) {
+            throw new BusinessRuleViolationException("Only pending accounts can request an OTP code");
+        }
+
+        String otpCode = generateOTPCode(6);
+        otpRepository.save(user.getId(), otpCode, EXPIRATION_TIME_IN_SECONDS);
+
+        switch (otpDeliveryMethod) {
+            case EMAIL -> eventPublisher.publish("user-otpCode-email-topic", new UserOtpCodeEvent(
+                    user.getId(), otpCode, user.getEmail(), null));
+
+            case SMS -> eventPublisher.publish("user-otpCode-phoneNumber-topic", new UserOtpCodeEvent(
+                    user.getId(), otpCode, null, user.getPhoneNumber()));
+
+            default -> throw new IllegalArgumentException("otpCodePreference must be email or phoneNumber");
+        }
     }
 
     public UserOutput findByUsername(String username) {
@@ -160,9 +221,16 @@ public class UserService {
                 () -> new UserException(ErrorCode.USER_NOT_FOUND_ID, "User not found with this id: " + id));
 
         if (hasEmail) {
+            if (!input.email().equals(user.getEmail()) && userRepository.existsByEmail(input.email())) {
+                throw new DomainValidationException("Email already in use");
+            }
             user.setEmail(input.email());
         }
         if (hasPhoneNumber) {
+            if (!input.phoneNumber().equals(user.getPhoneNumber())
+                    && userRepository.existsByPhoneNumber(input.phoneNumber())) {
+                throw new DomainValidationException("Phone number already in use");
+            }
             user.setPhoneNumber(input.phoneNumber());
         }
         if (hasPhotoUrl) {
@@ -174,6 +242,51 @@ public class UserService {
         UserOutput output = toOutput(savedUser);
 
         return output;
+    }
+
+    public void changePassword(UUID id, ChangePasswordInput input) {
+        if (id == null) {
+            throw new DomainValidationException("Id cannot be null");
+        }
+        if (input == null) {
+            throw new DomainValidationException("Input cannot be null");
+        }
+        if (input.currentPassword() == null || input.currentPassword().isBlank()) {
+            throw new DomainValidationException("Current password cannot be null or blank");
+        }
+        if (input.newPassword() == null || input.newPassword().isBlank()) {
+            throw new DomainValidationException("New password cannot be null or blank");
+        }
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND_ID, "User not found with this id: " + id));
+
+        if (!passwordEncoder.matches(input.currentPassword(), user.getPassword())) {
+            throw new UserException(ErrorCode.USER_INVALID_CURRENT_PASSWORD);
+        }
+
+        user.setPassword(passwordEncoder.encode(input.newPassword()));
+        userRepository.save(user);
+    }
+
+    public UserOutput updatePresence(UUID id, UserStatusPresence presence) {
+        if (id == null) {
+            throw new DomainValidationException("Id cannot be null");
+        }
+        if (presence == null) {
+            throw new DomainValidationException("Presence status cannot be null");
+        }
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND_ID, "User not found with this id: " + id));
+
+        if (user.getUserStatus() != UserStatus.ACTIVE) {
+            throw new BusinessRuleViolationException("Only active accounts can update presence");
+        }
+
+        user.setUserStatusPresence(presence);
+        User savedUser = userRepository.save(user);
+        return toOutput(savedUser);
     }
 
     public String generateOTPCode(int size) {
