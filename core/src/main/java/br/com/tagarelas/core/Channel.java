@@ -36,6 +36,10 @@ public abstract class Channel {
         this.updatedAt = LocalDateTime.now();
     }
 
+    protected void touchUpdatedAt() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
     
     public UUID getId() { return id; }
     public MessageChannelType getChannelType() { return channelType; }

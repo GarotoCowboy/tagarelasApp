@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import br.com.tagarelas.core.enums.GuildChannelKind;
 import br.com.tagarelas.core.enums.MessageChannelType;
+import br.com.tagarelas.core.exceptions.BusinessRuleViolationException;
 import br.com.tagarelas.core.exceptions.DomainValidationException;
 
 public class GuildChannel extends Channel {
@@ -61,15 +62,23 @@ public class GuildChannel extends Channel {
     }
 
     public void rename(String newName) {
+        if (isDeleted()) {
+            throw new BusinessRuleViolationException("Cannot rename a deleted channel");
+        }
         validateName(newName);
         this.name = newName;
+        touchUpdatedAt();
     }
 
     public void changePosition(int newPosition) {
+        if (isDeleted()) {
+            throw new BusinessRuleViolationException("Cannot change position of a deleted channel");
+        }
         if (newPosition < 0) {
             throw new DomainValidationException("Channel position cannot be negative");
         }
         this.position = newPosition;
+        touchUpdatedAt();
     }
 
     public UUID getGuildId() {
