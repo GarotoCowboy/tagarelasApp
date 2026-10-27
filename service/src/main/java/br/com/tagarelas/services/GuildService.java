@@ -7,6 +7,7 @@ import java.util.UUID;
 import br.com.tagarelas.core.Guild;
 import br.com.tagarelas.core.GuildInvite;
 import br.com.tagarelas.core.User;
+import br.com.tagarelas.core.enums.GuildPermission;
 import br.com.tagarelas.core.enums.UserStatus;
 import br.com.tagarelas.core.exceptions.BusinessRuleViolationException;
 import br.com.tagarelas.core.exceptions.DomainValidationException;
@@ -20,6 +21,7 @@ import br.com.tagarelas.services.output.GuildInviteOutput;
 import br.com.tagarelas.services.output.GuildOutput;
 import br.com.tagarelas.services.ports.GuildInviteRepository;
 import br.com.tagarelas.services.ports.GuildRepository;
+import br.com.tagarelas.services.ports.RoleRepository;
 import br.com.tagarelas.services.ports.UserRepository;
 
 public class GuildService {
@@ -30,12 +32,19 @@ public class GuildService {
     private final GuildRepository guildRepository;
     private final GuildInviteRepository guildInviteRepository;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
     public GuildService(GuildRepository guildRepository, GuildInviteRepository guildInviteRepository,
             UserRepository userRepository) {
+        this(guildRepository, guildInviteRepository, userRepository, null);
+    }
+
+    public GuildService(GuildRepository guildRepository, GuildInviteRepository guildInviteRepository,
+            UserRepository userRepository, RoleRepository roleRepository) {
         this.guildRepository = guildRepository;
         this.guildInviteRepository = guildInviteRepository;
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
     }
 
     public GuildOutput create(CreateGuildInput input) {
@@ -102,9 +111,9 @@ public class GuildService {
 
         Guild guild = findGuildEntityById(guildId);
 
-        if (!guild.isOwner(requesterId)) {
+        if (!hasGuildPermission(guild, requesterId, GuildPermission.MANAGE_GUILD)) {
             throw new GuildException(ErrorCode.GUILD_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can update guild details");
+                    "You do not have permission to update guild details");
         }
 
         String updatedName = hasName ? input.name() : guild.getName();
@@ -173,9 +182,9 @@ public class GuildService {
         Guild guild = findGuildEntityById(guildId);
 
         boolean isSelfLeave = requesterId.equals(targetUserId);
-        if (!isSelfLeave && !guild.isOwner(requesterId)) {
+        if (!isSelfLeave && !hasGuildPermission(guild, requesterId, GuildPermission.KICK_MEMBERS)) {
             throw new GuildException(ErrorCode.GUILD_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can remove another member");
+                    "You do not have permission to kick members from this guild");
         }
 
         guild.removeMember(targetUserId);
@@ -287,9 +296,10 @@ public class GuildService {
 
         Guild guild = findGuildEntityById(invite.getGuildId());
 
-        if (!invite.getCreatorId().equals(requesterId) && !guild.isOwner(requesterId)) {
+        if (!invite.getCreatorId().equals(requesterId)
+                && !hasGuildPermission(guild, requesterId, GuildPermission.MANAGE_GUILD)) {
             throw new GuildException(ErrorCode.GUILD_UNAUTHORIZED_ACTION,
-                    "Only the invite creator or the guild owner can revoke this invite");
+                    "Only the invite creator or a guild manager can revoke this invite");
         }
 
         invite.delete();
@@ -315,6 +325,19 @@ public class GuildService {
                 .stream()
                 .map(this::toInviteOutput)
                 .toList();
+    }
+
+    private boolean hasGuildPermission(Guild guild, UUID userId, GuildPermission permission) {
+        if (guild.isOwner(userId)) {
+            return true;
+        }
+        if (!guild.hasMember(userId) || roleRepository == null) {
+            return false;
+        }
+        return roleRepository.findRolesByGuildAndUser(guild.getId(), userId)
+                .stream()
+                .filter(role -> !role.isDeleted())
+                .anyMatch(role -> role.hasPermission(permission));
     }
 
     private Guild findGuildEntityById(UUID guildId) {
@@ -359,4 +382,3 @@ public class GuildService {
                 invite.isDeleted());
     }
 }
-
