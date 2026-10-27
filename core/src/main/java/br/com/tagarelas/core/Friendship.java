@@ -67,7 +67,7 @@ public void decline(UUID currentUserId){
     }
 
     if(this.status != FriendShipStatus.PENDING){
-        throw new BusinessRuleViolationException("Only pending orders can be accepted");
+        throw new BusinessRuleViolationException("Only pending orders can be declined");
     }
     this.status = FriendShipStatus.DECLINED;
     updatedAt = LocalDateTime.now();
