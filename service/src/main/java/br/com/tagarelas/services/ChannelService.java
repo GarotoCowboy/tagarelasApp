@@ -10,6 +10,7 @@ import br.com.tagarelas.core.Guild;
 import br.com.tagarelas.core.GuildChannel;
 import br.com.tagarelas.core.User;
 import br.com.tagarelas.core.enums.FriendShipStatus;
+import br.com.tagarelas.core.enums.GuildPermission;
 import br.com.tagarelas.core.enums.UserStatus;
 import br.com.tagarelas.core.exceptions.BusinessRuleViolationException;
 import br.com.tagarelas.core.exceptions.ChannelException;
@@ -24,6 +25,7 @@ import br.com.tagarelas.services.ports.DmChannelRepository;
 import br.com.tagarelas.services.ports.FriendshipRepository;
 import br.com.tagarelas.services.ports.GuildChannelRepository;
 import br.com.tagarelas.services.ports.GuildRepository;
+import br.com.tagarelas.services.ports.RoleRepository;
 import br.com.tagarelas.services.ports.UserRepository;
 
 public class ChannelService {
@@ -33,6 +35,7 @@ public class ChannelService {
     private final GuildRepository guildRepository;
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
     public ChannelService(
             DmChannelRepository dmChannelRepository,
@@ -40,11 +43,22 @@ public class ChannelService {
             GuildRepository guildRepository,
             FriendshipRepository friendshipRepository,
             UserRepository userRepository) {
+        this(dmChannelRepository, guildChannelRepository, guildRepository, friendshipRepository, userRepository, null);
+    }
+
+    public ChannelService(
+            DmChannelRepository dmChannelRepository,
+            GuildChannelRepository guildChannelRepository,
+            GuildRepository guildRepository,
+            FriendshipRepository friendshipRepository,
+            UserRepository userRepository,
+            RoleRepository roleRepository) {
         this.dmChannelRepository = dmChannelRepository;
         this.guildChannelRepository = guildChannelRepository;
         this.guildRepository = guildRepository;
         this.friendshipRepository = friendshipRepository;
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
     }
 
     public DmChannelOutput getOrCreateDm(UUID userOneId, UUID userTwoId) {
@@ -114,18 +128,13 @@ public class ChannelService {
             throw new DomainValidationException("Requester ID cannot be null");
         }
 
-        Guild guild = guildRepository.findById(input.guildId())
-                .orElseThrow(() -> new GuildException(ErrorCode.GUILD_NOT_FOUND,
-                        "Guild not found with id: " + input.guildId()));
+        Guild guild = findGuildById(input.guildId());
 
         if (guild.isDeleted()) {
             throw new BusinessRuleViolationException("Cannot create a channel in a deleted guild");
         }
 
-        if (!guild.isOwner(input.requesterId())) {
-            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can create channels");
-        }
+        validateCanManageChannels(guild, input.requesterId());
 
         GuildChannel guildChannel = new GuildChannel(
                 input.guildId(),
@@ -147,10 +156,7 @@ public class ChannelService {
         GuildChannel channel = findGuildChannelEntityById(channelId);
         Guild guild = findGuildById(channel.getGuildId());
 
-        if (!guild.isOwner(requesterId)) {
-            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can rename channels");
-        }
+        validateCanManageChannels(guild, requesterId);
 
         channel.rename(newName);
         GuildChannel savedChannel = guildChannelRepository.save(channel);
@@ -169,10 +175,7 @@ public class ChannelService {
         GuildChannel channel = findGuildChannelEntityById(channelId);
         Guild guild = findGuildById(channel.getGuildId());
 
-        if (!guild.isOwner(requesterId)) {
-            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can reorder channels");
-        }
+        validateCanManageChannels(guild, requesterId);
 
         channel.changePosition(newPosition);
         GuildChannel savedChannel = guildChannelRepository.save(channel);
@@ -191,10 +194,7 @@ public class ChannelService {
         GuildChannel channel = findGuildChannelEntityById(channelId);
         Guild guild = findGuildById(channel.getGuildId());
 
-        if (!guild.isOwner(requesterId)) {
-            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION,
-                    "Only the guild owner can delete channels");
-        }
+        validateCanManageChannels(guild, requesterId);
 
         if (channel.isDeleted()) {
             throw new BusinessRuleViolationException("Channel is already deleted");
@@ -212,6 +212,24 @@ public class ChannelService {
                 .stream()
                 .map(this::toGuildChannelOutput)
                 .toList();
+    }
+
+    private void validateCanManageChannels(Guild guild, UUID requesterId) {
+        if (guild.isOwner(requesterId)) {
+            return;
+        }
+        if (!guild.hasMember(requesterId) || roleRepository == null) {
+            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION);
+        }
+
+        boolean hasManageChannelsPerm = roleRepository.findRolesByGuildAndUser(guild.getId(), requesterId)
+                .stream()
+                .filter(role -> !role.isDeleted())
+                .anyMatch(role -> role.hasPermission(GuildPermission.MANAGE_CHANNELS));
+
+        if (!hasManageChannelsPerm) {
+            throw new ChannelException(ErrorCode.CHANNEL_UNAUTHORIZED_ACTION);
+        }
     }
 
     private GuildChannel findGuildChannelEntityById(UUID channelId) {
@@ -250,4 +268,3 @@ public class ChannelService {
                 channel.isDeleted());
     }
 }
-
