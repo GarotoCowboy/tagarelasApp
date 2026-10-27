@@ -1,0 +1,17 @@
+{"properties": [
+  {
+    "name": "rethinkdb.database",
+    "type": "java.lang.String",
+    "description": "A description for 'rethinkdb.database'"
+  },
+  {
+    "name": "rethinkdb.port",
+    "type": "java.lang.String",
+    "description": "A description for 'rethinkdb.port'"
+  },
+  {
+    "name": "rethinkdb.host",
+    "type": "java.lang.String",
+    "description": "A description for 'rethinkdb.host'"
+  }
+]}
