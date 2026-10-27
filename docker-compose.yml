@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  db:
+    image: rethinkdb:latest
+    container_name: tagarelas_rethinkDB
+    restart: unless-stopped
+    ports:
+      - ${RETHINK_WEB_PORT}:8080
+      - ${RETHINK_CLIENT_DRIVER_PORT}:28015
+      - ${RETHINK_CLUSTER_COMMUNICATION_PORT}:29015
+    volumes:
+      - tagarelas_data:/data
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: tagarelas_kafka
+    restart: unless-stopped
+    ports:
+      - ${KAFKA_PORT}:9092
+
+volumes:
+  tagarelas_data:
+
+
+  
